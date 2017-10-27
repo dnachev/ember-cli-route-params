@@ -2,5 +2,5 @@
 'use strict';
 
 module.exports = {
-  name: 'ember-cli-route-context'
+  name: 'ember-cli-route-model-params'
 };
