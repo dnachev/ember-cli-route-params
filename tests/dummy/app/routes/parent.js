@@ -10,9 +10,9 @@ export default Route.extend({
     };
   },
 
-  getChildModelParams(childRouteName, model) {
+  getChildRouteParams(childRouteName, model, params) {
     return {
-      parentId: model.parentId,
+      parentId: model.parentId || params.id,
       parentEntity: model.parentEntity,
     };
   },

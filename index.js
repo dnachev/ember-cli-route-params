@@ -2,5 +2,5 @@
 'use strict';
 
 module.exports = {
-  name: 'ember-cli-route-model-params'
+  name: 'ember-cli-route-params'
 };
