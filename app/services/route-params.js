@@ -1,5 +1,4 @@
-import Service from '@ember/service';
-import { assert } from '@ember/debug';
+import { default as Service, inject } from '@ember/service';
 import { get } from '@ember/object';
 
 function getChildRouteName(childRoute, parentRoute) {
@@ -14,7 +13,7 @@ function getChildRouteName(childRoute, parentRoute) {
 
 function validateParams(childRouteName, actual, expected) {
   const missing = [];
-  
+
   for (let i = 0; i < expected.length; i++) {
     if (actual.indexOf(expected[i]) === -1) {
       missing.push(expected[i]);
@@ -36,28 +35,7 @@ function filterParams(model, names) {
 }
 
 export default Service.extend({
-  init() {
-    this.contextStack = [];
-  },
-
-  addRoute(route, model) {
-    for (let i = 0; i < this.contextStack.length; i++) {
-      if (this.contextStack[i].route != route) {
-        continue;
-      }
-      // found the route, kill the rest of the stack
-      this.contextStack = this.contextStack.slice(0, i);
-      break;
-    }
-    this.contextStack.push({
-      route,
-      model,
-    });
-  },
-
-  validateRouteCleanup() {
-    // TODO This can be used to validate whether the stack has been correctly managed
-  },
+  routing: inject('-routing'),
 
   getRouteModelParams(route, paramNames) {
     const parentRouteAndModel = this._findRouteParentAndModel(route);
@@ -70,26 +48,37 @@ export default Service.extend({
     } = parentRouteAndModel;
 
     const childRouteName = getChildRouteName(route, parentRoute);
-    // TODO This is the simplest logic to determine the route model, although it is not very official
     const modelParams = parentRoute.getChildModelParams(childRouteName, parentModel);
     validateParams(route.routeName, Object.keys(modelParams), paramNames);
     return filterParams(modelParams, paramNames);
   },
 
   /**
-   * Find the parent route in the current stack or the last route
-   * if the getRouteModelParams() has been called before the `afterModel` function
-   * of the child route has been called.
+   * This is the essence of the library, which peeks into the private API of the router library
+   * to be able to determine the parent route and associated model.
+   *
+   * It does this by triggering an event in the current route hierarchy (the active transition
+   * or the current router state) and let the event bubble to the parent route of the passed
+   * in child. When the event reaches the parent route, a callback is invoked with the required
+   * information.
+   *
+   * This requires all routes to implement the special event `__findParentRouteAndModel` to be
+   * able to correctly handle the bubbling of the event and providing the data.
    */
   _findRouteParentAndModel(childRoute) {
-    let parentRouteAndModel = null;
-    for (let i = 0; i < this.contextStack.length; i++) {
-      if (this.contextStack[i].route === childRoute) {
-        break;
-      }
-      parentRouteAndModel = this.contextStack[i];
+    const router = get(this, 'routing.router');
+    const routeHierarchy = router._routerMicrolib.activeTransition || router;
+    let routeAndModel = null;
+    const context = {
+      lastRoute: null,
+      callback: (result) => {
+        routeAndModel = result;
+      },
+    };
+    routeHierarchy.trigger('__findParentRouteAndModel', childRoute, context);
+    if (!routeAndModel) {
+      throw new Error(`Cannot find a parent for route ${childRoute.routeName}`);
     }
-    return parentRouteAndModel;
+    return routeAndModel;
   },
-
 });
